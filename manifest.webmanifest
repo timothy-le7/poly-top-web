@@ -1,14 +1,14 @@
 {
   "id": "./",
-  "name": "Poly-Top",
-  "short_name": "Poly-Top",
+  "name": "Glimmermarch",
+  "short_name": "Glimmermarch",
   "lang": "en",
-  "description": "An independent tiny-world strategy game. Play offline after opening once online.",
+  "description": "An original wizard strategy game. Play offline after opening once online.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#15384f",
-  "theme_color": "#000000",
+  "background_color": "#172237",
+  "theme_color": "#172237",
   "icons": [
     {
       "src": "./icon-192.png",

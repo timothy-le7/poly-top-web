@@ -39,11 +39,11 @@
   }
 
   function showWelcome() {
-    openModal(modalCloseButton() + '<div class="web-app-welcome"><img class="web-app-badge" src="./icon-512.png" alt="" width="72" height="72"><h2>Poly-Top</h2>' +
-      '<p class="subtitle">Build cities. Explore the world.<br>Your game saves as you play.</p>' +
+    openModal(modalCloseButton() + '<div class="web-app-welcome"><img class="web-app-badge" src="./icon-512.png" alt="" width="72" height="72"><h2>Glimmermarch</h2>' +
+      '<p class="subtitle">Lead a wizard circle. Light the unknown.<br>Your game saves as you play.</p>' +
       '<button class="large-button" id="web-app-play">Play now ' + icon('chevron') + '</button>' +
       '<button class="large-button secondary" id="web-app-add-icon">' + homeIcon + 'Add game icon</button>' +
-      '<p class="save-label">Play here now, or add an icon first<br>for a full-screen view.</p></div>', 'Welcome to Poly-Top');
+      '<p class="save-label">Play here now, or add an icon first<br>for a full-screen view.</p></div>', 'Welcome to Glimmermarch');
     const play = () => { rememberWelcome(); closeModal(); };
     document.getElementById('web-app-play').onclick = play;
     document.querySelector('#modal .modal-close').onclick = play;
@@ -63,14 +63,14 @@
     if (!registration?.waiting || applyingUpdate) return;
     if (!save()) { toast('Export a save before updating. Autosave is unavailable.'); return; }
     applyingUpdate = true;
-    toast('Progress saved. Updating Poly-Top…');
+    toast('Progress saved. Updating Glimmermarch…');
     registration.waiting.postMessage({ type: 'POLY_TOP_APPLY_UPDATE' });
   }
 
   function showAppHelp() {
     const installed = standalone();
     openModal(modalCloseButton() + '<span class="eyebrow">PLAY ANYWHERE</span><h2>' + (installed ? 'Your game icon' : 'Add the game icon') + '</h2>' +
-      (installed ? '<p class="subtitle">You\'re ready! Open Poly-Top from its icon whenever you want to play.</p>' : '<p class="subtitle">First, open this link in Safari. Then:</p><div class="web-app-steps"><div class="web-app-step"><span class="help-number">1</span><div><b>' + shareIcon + 'Tap Share.</b>The square with an up arrow.</div></div><div class="web-app-step"><span class="help-number">2</span><div><b>' + homeIcon + 'Add to Home Screen.</b>Choose this from the Share list.</div></div><div class="web-app-step"><span class="help-number">3</span><div><b>Tap Add.</b>Keep Open as Web App switched on.</div></div></div>') +
+      (installed ? '<p class="subtitle">You\'re ready! Open Glimmermarch from its icon whenever you want to play.</p>' : '<p class="subtitle">First, open this link in Safari. Then:</p><div class="web-app-steps"><div class="web-app-step"><span class="help-number">1</span><div><b>' + shareIcon + 'Tap Share.</b>The square with an up arrow.</div></div><div class="web-app-step"><span class="help-number">2</span><div><b>' + homeIcon + 'Add to Home Screen.</b>Choose this from the Share list.</div></div><div class="web-app-step"><span class="help-number">3</span><div><b>Tap Add.</b>Keep Open as Web App switched on.</div></div></div>') +
       '<div class="web-app-status"><strong id="web-app-offline-status" role="status">' + offlineStatus() + '</strong>' + (installed ? 'Once ready, you can play without Wi-Fi.' : 'Open the new game icon once with Wi-Fi. Wait until this says Available offline.') + '</div>' +
       '<button class="large-button" id="web-app-back">Play now ' + icon('chevron') + '</button><button class="large-button secondary" id="web-app-update" hidden>Save progress and update</button>' +
       '<details class="save-label web-app-backups"><summary>Help and backups</summary><p>If Share is hidden, tap Safari’s page menu first. If Add to Home Screen is missing, scroll to Edit Actions to add it.</p><p>Your progress stays on this phone. Menu → Export save makes a backup. If a Safari game is missing from the new icon, export it in Safari and use Import save in the app.</p></details>', installed ? 'Game icon' : 'Add the game icon');
