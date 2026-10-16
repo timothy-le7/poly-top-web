@@ -873,37 +873,243 @@ function train(c,type){
 }
 function checkGameOver(){if(game.over)return;if(!playerCities().length){game.over=true;game.winner=game.factions.find(f=>!f.eliminated&&f.id!==0)?.id??1}else if(game.mode==='domination'&&game.factions.slice(1).every(f=>f.eliminated)){game.over=true;game.winner=0}else if(game.mode==='perfection'&&game.turn>=30){game.over=true;game.winner=0}if(game.over){save();if(!busy){const endedGame=game;setTimeout(()=>{if(game===endedGame)showResult()},300)}}}
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,document.hidden||reducedMotion.matches?0:ms));
-async function aiTurn(id){
- const turnGame=game,f=faction(id);if(f.eliminated)return;advanceBuildings(id);f.stars+=Math.max(0,income(id)+({easy:-1,normal:0,hard:1,crazy:3}[game.difficulty]));game.units.filter(u=>u.owner===id).forEach(resetUnitTurn);
- const buyTech=key=>{const cost=techCost(key,id);if(!ownsTech(id,key)&&canResearch(key,id)&&f.stars>=cost+2){f.stars-=cost;f.tech.push(key);updateTasks(id)}};
- // Develop resources that actually exist, and unlock coastal travel while it
- // matters. Turn-based research alone leaves island tribes stranded for ages.
- const owned=game.tiles.filter(t=>t.owner===id);
- for(const [resource,key]of [['fruit','organization'],['animal','hunting'],['fish','fishing']])if(owned.some(t=>t.resource===resource&&!t.building))buyTech(key);
- if(game.turn>1){if(owned.some(t=>t.terrain==='field'&&!t.building))buyTech('farming');if(owned.some(t=>t.terrain==='forest'&&!t.building))buyTech('forestry');if(owned.some(t=>t.terrain==='mountain'&&t.ore&&!t.building)){buyTech('climbing');buyTech('mining')}}
- if(owned.some(t=>waterTile(t)&&!t.frozen&&adjacentTiles(t).some(n=>!waterTile(n)))){buyTech('fishing');buyTech('sailing')}
- if(game.units.some(u=>u.owner===id&&u.boat)){buyTech('navigation');buyTech('ramming')}
- if(game.turn>1){buyTech('organization');buyTech('hunting')}if(game.turn>3){buyTech('climbing');buyTech('riding')}if(game.turn>6){buyTech('archery');buyTech('mining')}if(game.turn>9){buyTech('smithery');buyTech('fishing');buyTech('sailing')}if(game.turn>12){buyTech('navigation');buyTech('forestry');buyTech('farming');buyTech('roads')}if(game.turn>16){buyTech('mathematics');buyTech('construction');buyTech('trade');buyTech('freespirit');buyTech('chivalry');buyTech('ramming')}if(game.turn>20){buyTech('meditation');buyTech('philosophy');buyTech('aquatism');buyTech('strategy');buyTech('diplomacy');buyTech('spiritualism')}
- for(const t of owned){
-  const options=tileActions(t,id).filter(a=>(!a.tech||ownsTech(id,a.tech))&&f.stars>=a.cost&&!(a.kind==='enchant'&&unitAt(t.x,t.y)));
-  const action=options.find(a=>a.kind==='harvest')||options.find(a=>a.kind==='monument'&&!t.resource)||options.find(a=>['farm','fungi','mine','lumber'].includes(a.kind))||options.find(a=>PRODUCTION[a.kind])||options.find(a=>a.kind==='sanctuary'&&adjacentTiles(t).some(n=>n.owner===id&&n.terrain==='forest'))||options.find(a=>a.kind==='market'&&marketIncome(t)>0)||options.find(a=>a.kind==='port'&&adjacentTiles(t).some(n=>!waterTile(n)));
-  if(!action)continue;if(action.kind==='monument')action.monument=f.tasks.unlocked.find(k=>!f.tasks.built.includes(k));applyImprovement(t,action,id);
- }
-
- // Finish all available strikes, including a Venom Fly's second shot and Knight chains.
- const strike=async u=>{let acted=false;for(let limit=game.units.length+1;limit>0&&game===turnGame&&!game.over&&game.units.includes(u);limit--){const targets=attackable(u);if(!targets.length)break;targets.sort((a,b)=>a.hp-b.hp);if(!attackUnit(u,targets[0]))break;acted=true;if(seen(tileAt(u.x,u.y)))await pause(380)}return acted};
- const units=game.units.filter(u=>u.owner===id);for(const u of units)if(u.boat==='raft'&&tileAt(u.x,u.y).owner===id){const upgrade=['bomber','rammer','scout'].find(k=>ownsTech(id,NAVAL[k].tech)&&f.stars>=NAVAL[k].cost+2);if(upgrade){f.stars-=NAVAL[upgrade].cost;u.boat=upgrade}}
-
- for(const u of units){if(game!==turnGame)return;if(game.over)break;if(!game.units.includes(u)||u.stunned)continue;if(canExamine(u)){examineRuin(u);continue}if(canPromote(u)){u.veteran=true;u.hp=maxHP(u)}const c=cityAt(u.x,u.y);if(c&&c.owner!==id&&(c.owner<0||hostile(c.owner,id))){capture(u,c);if(seen(tileAt(u.x,u.y)))await pause(170);continue}
-  if(u.hp<maxHP(u)*.35&&tileAt(u.x,u.y).owner===id){healUnit(u,4);u.moved=u.attacked=true;continue}
-  if(await strike(u))continue;
-  if((unitDef(u).swarm||unitDef(u).healer)&&canUsePower(u)){unitPower(u);if(seen(tileAt(u.x,u.y)))await pause(170);continue}
-  const objectives=game.cities.filter(cc=>cc.owner!==id&&(cc.owner<0||hostile(cc.owner,id)));if(!objectives.length)continue;objectives.sort((a,b)=>distance(u,a)*(a.owner<0?.75:1)-distance(u,b)*(b.owner<0?.75:1));
-  const target=objectives[0],moves=[...reachable(u,false).values()];moves.sort((a,b)=>distance(a,target)-distance(b,target)||a.cost-b.cost);if(moves.length&&distance(moves[0],target)<distance(u,target)){moveUnit(u,moves[0].x,moves[0].y);if(seen(tileAt(u.x,u.y)))await pause((u.anim?.duration||160)+20)}
-  if(game!==turnGame)return;if(!(await strike(u))&&(TYPES[u.type].swarm||TYPES[u.type].healer)&&canUsePower(u))unitPower(u);
- }
- if(game!==turnGame||game.over)return;for(const c of game.cities.filter(c=>c.owner===id)){if(unitAt(c.x,c.y)||f.stars<2)continue;if(supportedUnits(c).length>=c.level+1)continue;const candidates=['knight','swordsman','archer','rider','warrior'].map(k=>tribeFor(id).roster?.[k]||k).filter(k=>(!TYPES[k].tech||ownsTech(id,TYPES[k].tech))&&f.stars>=TYPES[k].cost);if(!candidates.length)continue;const type=game.difficulty==='easy'?candidates.at(-1):candidates[(game.turn+c.id)%Math.min(2,candidates.length)];f.stars-=TYPES[type].cost;game.units.push(createUnit(id,type,c.x,c.y))}
+// The policy sees its own explored map. Rules, costs and difficulty income are
+// shared with the player; planning state is discarded at each faction turn.
+const AI_LEVELS={easy:{risk:.55,predict:false,coordination:false},normal:{risk:.9,predict:true,coordination:true},hard:{risk:1.15,predict:true,coordination:true},crazy:{risk:1.3,predict:true,coordination:true}};
+function aiContext(id){
+ const known=faction(id).explored;
+ return{id,known,level:AI_LEVELS[game.difficulty],cities:game.cities.filter(c=>c.owner===id),enemies:game.units.filter(u=>hostile(u.owner,id)&&known[tileIndex(u.x,u.y)]),units:game.units.filter(u=>u.owner===id),reservations:new Map(),threats:null};
 }
+function aiRefresh(context){const next=aiContext(context.id);next.reservations=context.reservations;return next}
+function aiUnitValue(u){const d=unitDef(u);return 5+(TYPES[u.type].cost+(u.boat?NAVAL[u.boat].cost:0))*1.5+d.attack*2+d.defense+d.range+(d.super?15:0)+(d.convert?4:0)}
+function aiMoves(u,c){return [...reachable(u,false).values()].filter(p=>p.path.every(n=>c.known[tileIndex(n.x,n.y)]))}
+function aiThreats(c){
+ if(c.threats)return c.threats;
+ const threats=Array.from({length:game.tiles.length},()=>[]);
+ for(const e of c.enemies){
+  const d=unitDef(e);if(e.frozen||!d.attack&&!d.convert&&!d.freeze)continue;
+  const origins=[e];
+  if(c.level.predict&&!d.noDash){const ready={...e,moved:false,attacked:false,stunned:false};for(const p of reachable(ready,false).values())if(p.path.every(t=>c.known[tileIndex(t.x,t.y)])&&(d.flying||!e.boat&&d.swim||!!e.boat===waterTile(tileAt(p.x,p.y))))origins.push(p)}
+  const covered=new Set();
+  for(const p of origins)for(let y=p.y-d.range;y<=p.y+d.range;y++)for(let x=p.x-d.range;x<=p.x+d.range;x++){const t=tileAt(x,y);if(t&&c.known[tileIndex(x,y)])covered.add(tileIndex(x,y))}
+  for(const index of covered)threats[index].push(e);
+ }
+ c.threats=threats;return threats;
+}
+function aiDanger(u,p,c,exclude=null){
+ const target={...u,x:p.x,y:p.y};if(u.boat&&!waterTile(tileAt(p.x,p.y)))delete target.boat;
+ let damage=0;
+ for(const e of aiThreats(c)[tileIndex(p.x,p.y)]){if(e.id===exclude)continue;const d=unitDef(e);damage+=d.convert?target.hp:d.freeze?2:combatResult({...e,stunned:false},target).damage}
+ return damage;
+}
+function aiAttackValue(u,target,c){
+ const d=unitDef(u),r=combatResult(u,target),kill=!d.convert&&r.damage>=target.hp,value=aiUnitValue(target),ownValue=aiUnitValue(u),city=cityAt(target.x,target.y);
+ let score=d.convert?value*1.9:Math.min(r.damage,target.hp)/maxHP(target)*value+(kill?value*.7:0)-r.counter/maxHP(u)*ownValue*c.level.risk;
+ if(r.counter>=u.hp)score-=ownValue*(c.level.risk+.45);
+ if(d.freeze&&!target.frozen)score+=value*.55;
+ if(d.poison&&!target.poisoned)score+=value*.14;
+ if(city)score+=city.owner===c.id?(kill||d.convert?20:7):(kill||d.convert?10:2);
+ if(d.splash||d.poisonSplash)for(const e of c.enemies)if(e.id!==target.id&&distance(e,target)<=1)score+=d.poisonSplash&&!e.poisoned?2:Math.min(e.hp,Math.floor(attackDamage(u,e)/2))/maxHP(e)*aiUnitValue(e);
+ if(kill&&d.persist){const origin=d.range===1?target:u;score+=c.enemies.filter(e=>e.id!==target.id&&distance(e,origin)<=d.range&&attackDamage({...u,x:origin.x,y:origin.y},e)>=e.hp).reduce((v,e)=>v+aiUnitValue(e)*.35,0)}
+ if(c.level.coordination&&!kill&&!d.convert){const support=c.units.filter(a=>a.id!==u.id&&!a.attacked&&!a.stunned&&!a.frozen&&distance(a,target)<=unitDef(a).range);if(support.some(a=>attackDamage(a,{...target,hp:Math.max(1,target.hp-r.damage)})>=target.hp-r.damage))score+=value*.2}
+ const landing=kill&&d.range===1&&canEnter(u,tileAt(target.x,target.y))?target:u,remaining=Math.max(1,u.hp-r.counter),incoming=aiDanger({...u,hp:remaining},landing,c,kill||d.convert?target.id:null);
+ if(incoming>=remaining&&incoming>0)score-=ownValue*.45*c.level.risk;
+ if(kill)score-=Math.max(0,r.damage-target.hp)*.12;
+ return score;
+}
+function aiBestAttack(u,c){
+ let best=null;
+ for(const target of attackable(u)){if(!c.known[tileIndex(target.x,target.y)])continue;const value=aiAttackValue(u,target,c);if(value>0&&(!best||value>best.value+.001||Math.abs(value-best.value)<.001&&target.id<best.target.id))best={u,target,value}}
+ return best;
+}
+function aiCityPressure(city,c){return c.enemies.filter(e=>!e.frozen&&distance(e,city)<=unitDef(e).move+unitDef(e).range+1)}
+function aiPowerValue(u,c){
+ if(!canUsePower(u))return 0;const d=unitDef(u);
+ if(d.freezeArea)return c.enemies.filter(e=>!e.frozen&&distance(e,u)<=1).reduce((v,e)=>v+aiUnitValue(e)*.65,0);
+ return powerTargets(u).reduce((v,a)=>v+(d.swarm&&!a.moved?4:0)+(d.healer?(a.poisoned?5:Math.min(4,maxHP(a)-a.hp)/maxHP(a)*aiUnitValue(a)):0),0);
+}
+function aiCanRoute(u,t){
+ if(!t)return false;const city=cityAt(t.x,t.y);if(city?.owner>=0&&city.owner!==u.owner&&!hostile(city.owner,u.owner))return false;
+ const d=TYPES[u.type];return d.flying||t.frozen||t.bridge||t.terrain!=='mountain'||ownsTech(u.owner,'climbing');
+}
+function aiRouteCost(u,from,to){
+ const d=TYPES[u.type],water=waterTile(to),fromWater=waterTile(from);
+ if(!d.swim&&!d.flying&&water&&!fromWater&&(to.building!=='port'||to.owner!==u.owner))return Infinity;
+ const road=t=>(t.owner<0||t.owner===u.owner)&&(t.road||t.bridge||cityAt(t.x,t.y));
+ const roads=!water&&!d.flying&&!d.creep&&ownsTech(u.owner,'roads')&&road(from)&&road(to);
+ const move=water&&!d.swim&&!d.flying?(u.boat?NAVAL[u.boat].move:2):d.move;
+ return (roads?.5:!d.flying&&(to.terrain==='mountain'||to.terrain==='forest'&&!d.creep)?move:1)/move+(!d.swim&&!d.flying&&water!==fromWater?.7:0);
+}
+function aiRevealGain(u,p,c){
+ const radius=(unitDef(u).vision||1)+(tileAt(p.x,p.y).terrain==='mountain'&&!u.boat?1:0);let count=0;
+ for(let y=p.y-radius;y<=p.y+radius;y++)for(let x=p.x-radius;x<=p.x+radius;x++){const t=tileAt(x,y);if(t&&!c.known[tileIndex(x,y)])count++}return count;
+}
+// A multi-source Dijkstra field routes around coastlines and mountain barriers.
+// Goal reservations spread scouts between villages/frontiers without saved plans.
+function aiRouteField(u,c){
+ const costs=new Float64Array(game.tiles.length).fill(Infinity),goals=Array(game.tiles.length).fill(null),heap=[];
+ const occupied=new Map(game.units.filter(a=>a.owner===c.id||c.known[tileIndex(a.x,a.y)]).map(a=>[tileIndex(a.x,a.y),a]));
+ const push=(index,cost,goal)=>{if(cost>=costs[index])return;costs[index]=cost;goals[index]=goal;let i=heap.length;heap.push({index,cost,goal});while(i){const parent=(i-1)>>1;if(heap[parent].cost<=cost)break;heap[i]=heap[parent];i=parent}heap[i]={index,cost,goal}};
+ const pop=()=>{const first=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let child=i*2+1;if(child+1<heap.length&&heap[child+1].cost<heap[child].cost)child++;if(heap[child].cost>=last.cost)break;heap[i]=heap[child];i=child}heap[i]=last}return first};
+ const seed=(p,value,goal)=>{const t=tileAt(p.x,p.y),index=tileIndex(p.x,p.y),occupant=occupied.get(index);if(!c.known[index]||!aiCanRoute(u,t)||occupant&&occupant.owner!==c.id)return;push(index,-value+(c.reservations.get(goal)||0)*3,goal)};
+ for(const city of game.cities){
+  if(!c.known[tileIndex(city.x,city.y)])continue;
+  if(city.owner===c.id){const pressure=aiCityPressure(city,c);if(pressure.length){const value=8+Math.min(8,pressure.length*2)+(unitAt(city.x,city.y)?.owner!==c.id?6:0);seed(city,value,'defend:'+city.id);for(const t of adjacentTiles(city))seed(t,value-3,'defend:'+city.id)}continue}
+  if(city.owner>=0&&!hostile(city.owner,c.id))continue;
+  const value=city.owner<0?12:13+(city.capital?2:0),occupant=unitAt(city.x,city.y),goal='city:'+city.id;
+  if(!occupant||occupant.owner===c.id)seed(city,value,goal);else for(const t of game.tiles)if(distance(t,city)<=Math.max(1,unitDef(u).range))seed(t,value-2,goal);
+ }
+ for(const t of game.tiles){const index=tileIndex(t.x,t.y);if(!c.known[index])continue;
+  if(t.building==='ruin')seed(t,9,'ruin:'+index);
+  if(t.resource==='starfish'&&ownsTech(c.id,'navigation'))seed(t,8,'starfish:'+index);
+  if(adjacentTiles(t).some(n=>!c.known[tileIndex(n.x,n.y)]))seed(t,3+aiRevealGain(u,t,c)*.22,'frontier:'+index);
+ }
+ for(const enemy of c.enemies){const range=Math.max(1,unitDef(u).range),goal='enemy:'+enemy.id;for(let y=enemy.y-range;y<=enemy.y+range;y++)for(let x=enemy.x-range;x<=enemy.x+range;x++){const t=tileAt(x,y);if(t)seed(t,6+(unitDef(u).range>1?1:0),goal)}}
+ while(heap.length){const p=pop();if(p.cost!==costs[p.index])continue;const t=game.tiles[p.index];for(const n of adjacentTiles(t)){
+  const index=tileIndex(n.x,n.y),occupant=occupied.get(index);if(!c.known[index]||!aiCanRoute(u,n)||occupant&&occupant.owner!==c.id)continue;const step=aiRouteCost(u,n,t);if(Number.isFinite(step))push(index,p.cost+step,p.goal);
+ }}
+ return{costs,goals};
+}
+function aiMoveChoice(u,c){
+ const moves=aiMoves(u,c);if(!moves.length)return null;const route=aiRouteField(u,c),origin=route.costs[tileIndex(u.x,u.y)],ownValue=aiUnitValue(u),here=cityAt(u.x,u.y),dangerHere=aiDanger(u,u,c);
+ const position=(p,moving)=>{
+  const index=tileIndex(p.x,p.y),cost=route.costs[index],progress=Number.isFinite(origin)&&Number.isFinite(cost)?(origin-cost)*3:0;
+  const after={...u,x:p.x,y:p.y,moved:moving||u.moved},water=waterTile(tileAt(p.x,p.y)),d=TYPES[u.type];
+  if(moving){if(unitDef(u).noDash)after.attacked=true;if(u.boat&&!water){delete after.boat;after.attacked=true}else if(!u.boat&&!d.swim&&!d.flying&&!d.freezeArea&&water){after.boat=u.type==='giant'?'juggernaut':'raft';after.attacked=true}}
+  const attack=aiBestAttack(after,c),danger=aiDanger(after,p,c),hp=after.hp;
+  let value=progress+(moving?aiRevealGain(u,p,c)*.3:0)+(attack?attack.value*.85:0)-danger/maxHP(u)*ownValue*c.level.risk;
+  if(danger>=hp&&danger>0)value-=ownValue*.85*c.level.risk;
+  const city=cityAt(p.x,p.y);
+  if(city&&city.owner!==c.id&&(city.owner<0||hostile(city.owner,c.id)))value+=14;
+  if(city?.owner===c.id&&aiCityPressure(city,c).length)value+=7+(city.walls?3:0);
+  if(here?.owner===c.id&&moving&&faction(c.id).stars>=3&&supportedUnits(here).length<here.level+1&&aiCityPressure(here,c).length)value+=9;
+  if(here?.owner===c.id&&moving&&aiCityPressure(here,c).length&&!c.units.some(a=>a.id!==u.id&&distance(a,here)<=1)&&faction(c.id).stars<2)value-=10;
+  if(!moving&&!u.moved&&!u.attacked&&(u.hp<maxHP(u)||u.poisoned))value+=(u.poisoned?5:Math.min(maxHP(u)-u.hp,tileAt(u.x,u.y).owner===c.id?4:2)/maxHP(u)*ownValue*.8);
+  if(moving&&dangerHere>danger&&u.hp<maxHP(u)*.6)value+=3;
+  if(moving&&TYPES[u.type].growsInto&&danger>0)value-=ownValue;
+  return value;
+ };
+ const stay=position(u,false);let best=null;
+ for(const p of moves){const value=position(p,true)-stay-.12;if(value>0&&(!best||value>best.value+.001||Math.abs(value-best.value)<.001&&p.cost<best.p.cost))best={u,p,value,goal:route.goals[tileIndex(p.x,p.y)]}}
+ return best;
+}
+function aiTrainingChoice(city,c){
+ const id=c.id,f=faction(id);if(unitAt(city.x,city.y)||supportedUnits(city).length>=city.level+1)return null;
+ const nearby=c.enemies.filter(e=>distance(e,city)<=6),defend=aiCityPressure(city,c).length>0,army=c.units.filter(u=>distance(u,city)<=5),ranged=army.filter(u=>unitDef(u).range>1).length;
+ const choices=roster(id).filter(k=>(!TYPES[k].tech||ownsTech(id,TYPES[k].tech))&&TYPES[k].cost<=f.stars);
+ let best=null;
+ for(const type of choices){const d=TYPES[type];let value;
+  if(!nearby.length)value=d.move*2+d.defense+d.attack*.5-d.cost*.35+(d.swim?2:0)-(d.noDash?2:0)-(d.convert||d.freeze?4:0);
+  else value=d.attack*2+d.defense+(d.range>1?(ranged<Math.max(1,army.length*.4)?5:1):0)-d.cost*.25;
+  if(defend)value+=d.defense*2+(d.hp>=15?3:0)-(d.range>=3?4:0);
+  if(d.convert)value=nearby.some(e=>TYPES[e.type].super||e.veteran)?10:army.length>=4&&!army.some(u=>unitDef(u).healer||unitDef(u).convert)?7:0;
+  if(d.freeze)value=nearby.length&&!army.some(u=>unitDef(u).freeze)?10:!c.units.some(u=>unitDef(u).freezeArea)?7:0;
+  if(d.attack<=1&&!d.freeze&&!d.convert&&!defend)value-=5;
+  if(d.noDash&&d.range>=3&&army.length<2)value-=8;
+  if(game.difficulty==='easy')value-=Math.max(0,d.cost-2);
+  if(value>0&&(!best||value>best.value))best={city,type,value};
+ }
+ return best;
+}
+function aiRecruit(c,emergencyOnly=false){
+ const cities=[...c.cities].sort((a,b)=>aiCityPressure(b,c).length-aiCityPressure(a,c).length||a.id-b.id);
+ for(const city of cities){if(emergencyOnly&&!aiCityPressure(city,c).length)continue;
+  const desired=c.cities.length*2+2+c.enemies.length,active=game.units.filter(u=>u.owner===c.id).length;
+  if(!aiCityPressure(city,c).length&&active>=desired)continue;
+  const choice=aiTrainingChoice(city,c);if(!choice)continue;faction(c.id).stars-=TYPES[choice.type].cost;const u=createUnit(c.id,choice.type,city.x,city.y);game.units.push(u);c.units.push(u);
+ }
+}
+function aiImprovementValue(t,a,c){
+ const city=game.cities.find(city=>city.id===t.cityId),f=faction(c.id),pressure=city?aiCityPressure(city,c).length:0;
+ if(a.kind==='monument')return 100;
+ if(a.kind==='enchant')return c.units.length<c.cities.length*2+2+c.enemies.length?8:0;
+ if(['harvest','farm','fungi','mine','lumber'].includes(a.kind)||PRODUCTION[a.kind]){
+  let value=(a.kind==='fungi'?2:a.pop)*5/Math.max(1,a.cost)+(city?.level<=2?2:0);
+  if(city&&city.pop+a.pop>=city.level+1)value+=city.level>=4?8:5;
+  if(a.kind==='lumber'&&t.resource==='animal')value-=3;
+  if(a.kind==='harvest'&&f.tribe==='wildwood'&&t.resource==='animal')return 0;
+  return value-(pressure?1:0);
+ }
+ if(a.kind==='sanctuary'){const animals=adjacentTiles(t).filter(n=>n.owner===c.id&&n.terrain==='forest'&&n.resource==='animal'&&!n.building).length;return animals*2.5}
+ if(a.kind==='market')return marketIncome(t)*2;
+ if(a.kind==='port'){
+  if(game.tiles.some(n=>n.owner===c.id&&n.building==='port'&&(n.cityId===t.cityId||distance(n,t)<3)))return 0;
+  if(!adjacentTiles(t).some(n=>c.known[tileIndex(n.x,n.y)]&&!waterTile(n)&&canEnter({owner:c.id,type:'warrior'},n)))return 0;
+  return c.units.some(u=>unitDef(u).swim||unitDef(u).flying)?2:5+(c.enemies.some(e=>e.boat)?2:0);
+ }
+ if(a.kind==='temple'&&game.mode==='perfection'&&game.turn>=16&&!pressure)return 2+Math.min(3,(30-game.turn)/4);
+ return 0;
+}
+function aiTechChoices(c){
+ const id=c.id,owned=game.tiles.filter(t=>t.owner===id),plain=owned.filter(t=>!t.building),count=fn=>plain.filter(fn).length,war=c.enemies.length,boats=c.units.filter(u=>u.boat).length,ports=owned.filter(t=>t.building==='port').length;
+ const roles=roster(id),has=role=>c.units.some(u=>u.type===(tribeFor(id).roster?.[role]||role));
+ const coast=count(t=>waterTile(t)&&adjacentTiles(t).some(n=>c.known[tileIndex(n.x,n.y)]&&!waterTile(n))),ore=oreVisible(id)?count(t=>t.terrain==='mountain'&&t.ore):0,forests=count(t=>t.terrain==='forest');
+ const goal={organization:count(t=>t.resource==='fruit')*4,hunting:count(t=>t.resource==='animal')*4,forestry:forests*2,farming:cropsVisible(id)?count(t=>t.terrain==='field')*4:0,mining:ore*4,climbing:count(t=>t.terrain==='mountain')*1.3+(c.units.some(u=>adjacentTiles(u).some(t=>t.terrain==='mountain'))?3:0),
+  fishing:count(t=>t.resource==='fish')*4+(!ports&&coast?5:0),sailing:boats&&!ownsTech(id,'ramming')?9:0,ramming:boats?war?11:5:0,navigation:boats>=2&&war?12:0,aquatism:boats>=3?5:0,
+  riding:!has('rider')&&c.units.length<c.cities.length*2+2?7:0,archery:war&&!has('archer')?10:0,strategy:war&&c.cities.some(city=>aiCityPressure(city,c).length)&&!has('defender')?10:0,smithery:war?12:0,mathematics:war&&c.units.length>=3&&!has('catapult')?10:owned.filter(t=>t.building==='lumber').length*2,
+  construction:owned.filter(t=>t.building==='farm'||t.building==='fungi').length*2,roads:0,trade:owned.filter(t=>PRODUCTION[t.building]).length*2,chivalry:war>=3&&c.units.length>=3?11:0,
+  meditation:war&&roles.some(k=>TYPES[k].healer)&&c.units.length>=4?4:0,philosophy:faction(id).tech.length>=8&&income(id)>=8?7:0,freespirit:game.mode==='perfection'&&game.turn>=16?8:0,spiritualism:game.mode==='perfection'&&game.turn>=16&&forests?8:0};
+ // A useful descendant gives its prerequisites value; no calendar-based tech spree.
+ const utility=key=>Math.max(goal[key]||0,...Object.entries(TECHS).filter(([,d])=>d.parent===key).map(([child])=>ownsTech(id,child)?0:utility(child)*.65));
+ return Object.keys(TECHS).filter(k=>!ownsTech(id,k)&&canResearch(k,id)).map(key=>({key,value:utility(key)*3/techCost(key,id),cost:techCost(key,id)})).filter(a=>a.value>=1.1).sort((a,b)=>b.value-a.value||a.cost-b.cost);
+}
+async function aiDevelop(context,turnGame){
+ let c=context;
+ while(game===turnGame&&!game.over){
+  const f=faction(c.id),freeCity=c.cities.some(city=>!unitAt(city.x,city.y)&&supportedUnits(city).length<city.level+1),emergency=c.cities.some(city=>!unitAt(city.x,city.y)&&aiCityPressure(city,c).length),reserve=emergency?3:freeCity&&c.units.length<c.cities.length*2?2:0;
+  let best=null;
+  for(const t of game.tiles){if(t.owner!==c.id)continue;for(const a of tileActions(t,c.id)){
+   if(a.tech&&!ownsTech(c.id,a.tech)||a.cost>f.stars||a.kind==='enchant'&&unitAt(t.x,t.y))continue;
+   const city=game.cities.find(city=>city.id===t.cityId),levelUp=city&&a.pop>0&&city.pop+a.pop>=city.level+1;
+   if(f.stars-a.cost<reserve&&!levelUp&&a.kind!=='monument')continue;
+   const value=aiImprovementValue(t,a,c);if(value>0&&(!best||value>best.value+.001||Math.abs(value-best.value)<.001&&a.cost<best.a.cost))best={t,a,value};
+  }}
+  const research=aiTechChoices(c).find(a=>f.stars>=a.cost+Math.max(2,reserve));
+  if(research&&(!best||research.value>best.value+.5)){f.stars-=research.cost;f.tech.push(research.key);updateTasks(c.id)}
+  else if(best){if(best.a.kind==='monument')best.a.monument=f.tasks.unlocked.find(k=>!f.tasks.built.includes(k));applyImprovement(best.t,best.a,c.id)}
+  else break;
+  c=aiRefresh(c);await pause(0);
+ }
+ return c;
+}
+function aiNavalUpgrades(c){
+ const f=faction(c.id);
+ for(const u of c.units){if(u.boat!=='raft'||tileAt(u.x,u.y).owner!==c.id)continue;const nearby=c.enemies.filter(e=>distance(e,u)<=5),escorts=c.units.filter(a=>a.id!==u.id&&a.boat&&distance(a,u)<=3).length;
+  const choices=['scout','rammer','bomber'].filter(k=>ownsTech(c.id,NAVAL[k].tech)&&f.stars>=NAVAL[k].cost+2).map(key=>({key,value:key==='scout'?nearby.length?5:10:key==='rammer'?nearby.length?11:6:nearby.length&&escorts?13:3})).sort((a,b)=>b.value-a.value);
+  if(choices.length){u.boat=choices[0].key;f.stars-=NAVAL[u.boat].cost}
+ }
+}
+async function aiPresent(u){if(isAnimating()||u.anim&&seen(tileAt(u.x,u.y)))await pause(Math.max(0,animationUntil-performance.now(),u.anim?u.anim.start+u.anim.duration-performance.now():0)+20);else await pause(0)}
+async function aiTurn(id){
+ const turnGame=game,f=faction(id);if(f.eliminated)return;
+ advanceBuildings(id);f.stars+=Math.max(0,income(id)+({easy:-1,normal:0,hard:1,crazy:3}[game.difficulty]));game.units.filter(u=>u.owner===id).forEach(resetUnitTurn);
+ let c=aiContext(id);aiRecruit(c,true);c=await aiDevelop(aiRefresh(c),turnGame);if(game!==turnGame||game.over)return;aiNavalUpgrades(c);
+ // Capture first; clear urgent threats with coordinated strikes before moving.
+ for(const u of [...c.units]){if(!game.units.includes(u)||u.stunned||u.moved||u.attacked)continue;if(canPromote(u)){u.veteran=true;u.hp=maxHP(u)}const city=cityAt(u.x,u.y);if(city&&city.owner!==id&&(city.owner<0||hostile(city.owner,id))){capture(u,city);await aiPresent(u)}else if(canExamine(u)){examineRuin(u);await aiPresent(u)}if(game!==turnGame||game.over)return}
+ c=aiRefresh(c);
+ const strikes=async()=>{
+  while(game===turnGame&&!game.over){let best=null,power=null;for(const u of c.units){if(!game.units.includes(u)||u.stunned||u.frozen)continue;const attack=aiBestAttack(u,c);if(attack&&(!best||attack.value>best.value))best=attack;const value=aiPowerValue(u,c);if(value>0&&(!power||value>power.value))power={u,value}}
+   if(power&&(!best||power.value>best.value)){unitPower(power.u);await aiPresent(power.u)}else if(best){if(!attackUnit(best.u,best.target))break;await aiPresent(best.u)}else break;
+   if(game!==turnGame)return;c=aiRefresh(c);
+  }
+ };
+ await strikes();if(game!==turnGame||game.over)return;
+ // Urgent retreats and city departures go first. Each piece gets one route
+ // search per move, rather than recomputing every army route after every step.
+ const priority=u=>(u.hp<maxHP(u)*.5?20:0)+(cityAt(u.x,u.y)?.owner===id?8:0)+unitDef(u).move+(unitDef(u).range>1?2:0);
+ const pending=c.units.filter(u=>!u.moved&&!u.stunned&&!u.frozen).sort((a,b)=>priority(b)-priority(a)||a.id-b.id).map(u=>u.id);
+ while(pending.length&&game===turnGame&&!game.over){
+  const key=pending.shift(),u=game.units.find(a=>a.id===key);if(!u||u.moved||u.stunned||u.frozen)continue;
+  c=aiRefresh(c);const best=aiMoveChoice(u,c);if(!best){await pause(0);continue;}
+  if(moveUnit(u,best.p.x,best.p.y)){if(best.goal)c.reservations.set(best.goal,(c.reservations.get(best.goal)||0)+1);await aiPresent(u);if(game!==turnGame)return;c=aiRefresh(c);await strikes();
+   for(const rider of c.units)if(unitDef(rider).escape&&rider.attacked&&!rider.moved&&!pending.includes(rider.id))pending.push(rider.id);
+  }
+ }
+ if(game!==turnGame||game.over)return;
+ // Stationary wounded pieces recover through the same end-turn rule as humans.
+ c=await aiDevelop(aiRefresh(c),turnGame);if(game!==turnGame||game.over)return;aiRecruit(aiRefresh(c));
+}
+
 async function endTurn(){
  if(busy||game.over||isAnimating()||upgradeQueue.length||$('modal-layer').classList.contains('open')||$('tech-layer').classList.contains('open'))return;if(game.turnState)return resumeTurn();finishFactionTurn(0);game.turnState={nextFaction:1};selected=null;selectCity=false;save();return resumeTurn();
 }
