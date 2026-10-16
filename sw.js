@@ -1,5 +1,5 @@
 'use strict';
-const RELEASE = '34b1d44dda1c3898a032';
+const RELEASE = '0c82499795fd5a30267d';
 // Include the scope so unrelated apps on the same host cannot delete our caches.
 const PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
 const CACHE = PREFIX + RELEASE;
