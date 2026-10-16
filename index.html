@@ -1079,17 +1079,22 @@ function aiNavalUpgrades(c){
   if(choices.length){u.boat=choices[0].key;f.stars-=NAVAL[u.boat].cost}
  }
 }
+function aiCollectStarfish(u){
+ if(!game.units.includes(u)||!ownsTech(u.owner,'navigation'))return false;
+ const t=tileAt(u.x,u.y);if(t.resource!=='starfish')return false;
+ t.resource=null;faction(u.owner).stars+=8;floorRevision++;if(seen(t))emit(t.x,t.y,'+8 ★','#ffeda0');return true;
+}
 async function aiPresent(u){if(isAnimating()||u.anim&&seen(tileAt(u.x,u.y)))await pause(Math.max(0,animationUntil-performance.now(),u.anim?u.anim.start+u.anim.duration-performance.now():0)+20);else await pause(0)}
 async function aiTurn(id){
  const turnGame=game,f=faction(id);if(f.eliminated)return;
  advanceBuildings(id);f.stars+=Math.max(0,income(id)+({easy:-1,normal:0,hard:1,crazy:3}[game.difficulty]));game.units.filter(u=>u.owner===id).forEach(resetUnitTurn);
  let c=aiContext(id);aiRecruit(c,true);c=await aiDevelop(aiRefresh(c),turnGame);if(game!==turnGame||game.over)return;aiNavalUpgrades(c);
  // Capture first; clear urgent threats with coordinated strikes before moving.
- for(const u of [...c.units]){if(!game.units.includes(u)||u.stunned||u.moved||u.attacked)continue;if(canPromote(u)){u.veteran=true;u.hp=maxHP(u)}const city=cityAt(u.x,u.y);if(city&&city.owner!==id&&(city.owner<0||hostile(city.owner,id))){capture(u,city);await aiPresent(u)}else if(canExamine(u)){examineRuin(u);await aiPresent(u)}if(game!==turnGame||game.over)return}
+ for(const u of [...c.units]){aiCollectStarfish(u);if(!game.units.includes(u)||u.stunned||u.moved||u.attacked)continue;if(canPromote(u)){u.veteran=true;u.hp=maxHP(u)}const city=cityAt(u.x,u.y);if(city&&city.owner!==id&&(city.owner<0||hostile(city.owner,id))){capture(u,city);await aiPresent(u)}else if(canExamine(u)){examineRuin(u);await aiPresent(u)}if(game!==turnGame||game.over)return}
  c=aiRefresh(c);
  const strikes=async()=>{
   while(game===turnGame&&!game.over){let best=null,power=null;for(const u of c.units){if(!game.units.includes(u)||u.stunned||u.frozen)continue;const attack=aiBestAttack(u,c);if(attack&&(!best||attack.value>best.value))best=attack;const value=aiPowerValue(u,c);if(value>0&&(!power||value>power.value))power={u,value}}
-   if(power&&(!best||power.value>best.value)){unitPower(power.u);await aiPresent(power.u)}else if(best){if(!attackUnit(best.u,best.target))break;await aiPresent(best.u)}else break;
+   if(power&&(!best||power.value>best.value)){unitPower(power.u);await aiPresent(power.u)}else if(best){if(!attackUnit(best.u,best.target))break;aiCollectStarfish(best.u);await aiPresent(best.u)}else break;
    if(game!==turnGame)return;c=aiRefresh(c);
   }
  };
@@ -1101,7 +1106,7 @@ async function aiTurn(id){
  while(pending.length&&game===turnGame&&!game.over){
   const key=pending.shift(),u=game.units.find(a=>a.id===key);if(!u||u.moved||u.stunned||u.frozen)continue;
   c=aiRefresh(c);const best=aiMoveChoice(u,c);if(!best){await pause(0);continue;}
-  if(moveUnit(u,best.p.x,best.p.y)){if(best.goal)c.reservations.set(best.goal,(c.reservations.get(best.goal)||0)+1);await aiPresent(u);if(game!==turnGame)return;c=aiRefresh(c);await strikes();
+  if(moveUnit(u,best.p.x,best.p.y)){aiCollectStarfish(u);if(best.goal)c.reservations.set(best.goal,(c.reservations.get(best.goal)||0)+1);await aiPresent(u);if(game!==turnGame)return;c=aiRefresh(c);await strikes();
    for(const rider of c.units)if(unitDef(rider).escape&&rider.attacked&&!rider.moved&&!pending.includes(rider.id))pending.push(rider.id);
   }
  }
