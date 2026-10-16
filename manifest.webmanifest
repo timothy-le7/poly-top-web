@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Cairncoast",
-  "short_name": "Cairncoast",
+  "name": "Hexgame",
+  "short_name": "Hexgame",
   "lang": "en",
   "description": "Independent turn-based strategy. Play offline after opening once online.",
   "start_url": "./",
