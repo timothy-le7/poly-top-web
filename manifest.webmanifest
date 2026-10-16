@@ -1,9 +1,9 @@
 {
   "id": "./",
-  "name": "Glimmermarch",
-  "short_name": "Glimmermarch",
+  "name": "Cairncoast",
+  "short_name": "Cairncoast",
   "lang": "en",
-  "description": "An original wizard strategy game. Play offline after opening once online.",
+  "description": "Independent turn-based strategy. Play offline after opening once online.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

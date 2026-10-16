@@ -4,6 +4,8 @@
   const style = document.createElement('style');
   style.textContent = `
     #web-app-update[hidden]{display:none}
+    #web-app-update-notice[hidden]{display:none}
+    #web-app-update-notice{position:absolute;left:12px;right:12px;top:calc(82px + env(safe-area-inset-top));min-height:44px;padding:10px 12px;border:1px solid #d6c178;border-radius:10px;background:#f3e2a5;color:#234559;font-size:12px;font-weight:700;z-index:18;box-shadow:0 4px 12px #173c5540}
     #web-app-menu span{min-width:0}
     #web-app-menu small{max-width:105px;white-space:normal;text-align:right}
     .web-app-welcome{text-align:center;padding:4px 0}
@@ -24,7 +26,7 @@
   document.head.append(style);
   const standalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const offlineStatus = () => offlineReady ? 'Available offline' : registrationFailed ? 'Open online to enable offline play' : 'Preparing offline play…';
-  const welcomeKey = 'poly-top-web-welcome-v1';
+  const welcomeKey = 'cairncoast-web-welcome-v1';
   const shareIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V2m-4 4 4-4 4 4M7 10H4v11h16V10h-3"/></svg>';
   const homeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 7v10m-5-5h10"/></svg>';
 
@@ -39,11 +41,11 @@
   }
 
   function showWelcome() {
-    openModal(modalCloseButton() + '<div class="web-app-welcome"><img class="web-app-badge" src="./icon-512.png" alt="" width="72" height="72"><h2>Glimmermarch</h2>' +
-      '<p class="subtitle">Lead a wizard circle. Light the unknown.<br>Your game saves as you play.</p>' +
+    openModal(modalCloseButton() + '<div class="web-app-welcome"><img class="web-app-badge" src="./icon-512.png" alt="" width="72" height="72"><h2>Cairncoast</h2>' +
+      '<p class="subtitle">Explore the world. Build your cities.<br>Your game saves as you play.</p>' +
       '<button class="large-button" id="web-app-play">Play now ' + icon('chevron') + '</button>' +
       '<button class="large-button secondary" id="web-app-add-icon">' + homeIcon + 'Add game icon</button>' +
-      '<p class="save-label">Play here now, or add an icon first<br>for a full-screen view.</p></div>', 'Welcome to Glimmermarch');
+      '<p class="save-label">Play here now, or add an icon first<br>for a full-screen view.</p></div>', 'Welcome to Cairncoast');
     const play = () => { rememberWelcome(); closeModal(); };
     document.getElementById('web-app-play').onclick = play;
     document.querySelector('#modal .modal-close').onclick = play;
@@ -57,20 +59,28 @@
     if (status) status.textContent = offlineStatus();
     const update = document.getElementById('web-app-update');
     if (update) update.hidden = !registration?.waiting;
+    updateNotice.hidden = !registration?.waiting;
   }
 
   function applyUpdate() {
     if (!registration?.waiting || applyingUpdate) return;
     if (!save()) { toast('Export a save before updating. Autosave is unavailable.'); return; }
     applyingUpdate = true;
-    toast('Progress saved. Updating Glimmermarch…');
+    toast('Progress saved. Updating Cairncoast…');
     registration.waiting.postMessage({ type: 'POLY_TOP_APPLY_UPDATE' });
   }
+
+  const updateNotice = document.createElement('button');
+  updateNotice.id = 'web-app-update-notice';
+  updateNotice.hidden = true;
+  updateNotice.textContent = 'Update ready · Save progress and reload';
+  updateNotice.onclick = applyUpdate;
+  document.getElementById('phone').append(updateNotice);
 
   function showAppHelp() {
     const installed = standalone();
     openModal(modalCloseButton() + '<span class="eyebrow">PLAY ANYWHERE</span><h2>' + (installed ? 'Your game icon' : 'Add the game icon') + '</h2>' +
-      (installed ? '<p class="subtitle">You\'re ready! Open Glimmermarch from its icon whenever you want to play.</p>' : '<p class="subtitle">First, open this link in Safari. Then:</p><div class="web-app-steps"><div class="web-app-step"><span class="help-number">1</span><div><b>' + shareIcon + 'Tap Share.</b>The square with an up arrow.</div></div><div class="web-app-step"><span class="help-number">2</span><div><b>' + homeIcon + 'Add to Home Screen.</b>Choose this from the Share list.</div></div><div class="web-app-step"><span class="help-number">3</span><div><b>Tap Add.</b>Keep Open as Web App switched on.</div></div></div>') +
+      (installed ? '<p class="subtitle">You\'re ready! Open Cairncoast from its icon whenever you want to play.</p>' : '<p class="subtitle">First, open this link in Safari. Then:</p><div class="web-app-steps"><div class="web-app-step"><span class="help-number">1</span><div><b>' + shareIcon + 'Tap Share.</b>The square with an up arrow.</div></div><div class="web-app-step"><span class="help-number">2</span><div><b>' + homeIcon + 'Add to Home Screen.</b>Choose this from the Share list.</div></div><div class="web-app-step"><span class="help-number">3</span><div><b>Tap Add.</b>Keep Open as Web App switched on.</div></div></div>') +
       '<div class="web-app-status"><strong id="web-app-offline-status" role="status">' + offlineStatus() + '</strong>' + (installed ? 'Once ready, you can play without Wi-Fi.' : 'Open the new game icon once with Wi-Fi. Wait until this says Available offline.') + '</div>' +
       '<button class="large-button" id="web-app-back">Play now ' + icon('chevron') + '</button><button class="large-button secondary" id="web-app-update" hidden>Save progress and update</button>' +
       '<details class="save-label web-app-backups"><summary>Help and backups</summary><p>If Share is hidden, tap Safari’s page menu first. If Add to Home Screen is missing, scroll to Edit Actions to add it.</p><p>Your progress stays on this phone. Menu → Export save makes a backup. If a Safari game is missing from the new icon, export it in Safari and use Import save in the app.</p></details>', installed ? 'Game icon' : 'Add the game icon');
